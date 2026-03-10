@@ -1,6 +1,4 @@
 import crypto from 'crypto';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore – resolved after pnpm install
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { addFirewallRule, removeFirewallRule } from './firewall.js';
