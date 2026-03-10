@@ -1,0 +1,41 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Build outputs
+dist/
+client/dist/
+coverage/
+client/coverage/
+
+# Planning and research workspaces
+plan/
+researches/
+
+# Tooling caches and runtime artifacts
+.playwright-mcp/
+artifacts/*.sqlite
+artifacts/*.sqlite-*
+artifacts/*.db
+artifacts/*.log
+artifacts/*.png
+
+# IDE and project config directories to ignore
+.github/
+.research/
+.specify/
+.vscode/
+
+# Local editor and OS noise
+.DS_Store
+Thumbs.db
+
+# Root-level manual snapshots and captures
+/[0-9][0-9]-*
+/*.png
+/playwright-terminal-light-snapshot.md

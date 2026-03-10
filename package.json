@@ -1,0 +1,43 @@
+{
+  "name": "copilot-api-wrapper",
+  "version": "1.0.0",
+  "description": "WebSocket server to expose GitHub Copilot CLI as a remote interactive terminal",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:all": "./start.sh",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "client:dev": "pnpm --dir client dev",
+    "client:build": "pnpm --dir client build",
+    "client:test": "pnpm --dir client test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.6.5",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "nanoid": "^5.1.6",
+    "node-pty": "^1.1.0",
+    "pino": "^10.3.1",
+    "sql.js": "^1.14.1",
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "node-pty"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "@types/sql.js": "^1.4.9",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

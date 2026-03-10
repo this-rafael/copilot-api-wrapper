@@ -1,0 +1,32 @@
+- main [ref=e3]:
+  - generic [ref=e34]:
+    - generic [ref=e35]:
+      - button "☾" [ref=e38] [cursor=pointer]
+      - strong [ref=e39]: Copilot
+      - button "Encerrar" [ref=e40] [cursor=pointer]
+    - generic [ref=e41]:
+      - button "A-" [ref=e42] [cursor=pointer]
+      - generic [ref=e43]: 15px
+      - button "A+" [ref=e44] [cursor=pointer]
+    - textbox "Terminal input" [ref=e73]
+    - generic "Acoes rapidas do terminal" [ref=e50]:
+      - button "↑" [ref=e51] [cursor=pointer]
+      - button "↓" [ref=e52] [cursor=pointer]
+      - button "←" [ref=e53] [cursor=pointer]
+      - button "→" [ref=e54] [cursor=pointer]
+      - button "Ctrl+C" [ref=e55] [cursor=pointer]
+      - button "Ctrl+S" [ref=e56] [cursor=pointer]
+      - button "Tab" [ref=e57] [cursor=pointer]
+      - button "Esc" [ref=e58] [cursor=pointer]
+      - button "Ctrl+D" [ref=e59] [cursor=pointer]
+      - button "Ctrl+L" [ref=e60] [cursor=pointer]
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - button "Commands" [ref=e63] [cursor=pointer]
+        - button "Raw Composer" [ref=e64] [cursor=pointer]:
+          - generic [ref=e65]: Raw
+          - strong [ref=e66]: Composer
+      - textbox "Digite um comando ou prompt..." [ref=e67]
+      - generic [ref=e68]:
+        - button "Linha" [ref=e69] [cursor=pointer]
+        - button "Enviar" [disabled] [ref=e70] [cursor=pointer]
