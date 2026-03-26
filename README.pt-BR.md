@@ -38,8 +38,10 @@ Não é apenas um console improvisado. O fluxo inclui gerenciamento de sessão, 
 | Renderização real de terminal | O output ANSI é preservado com xterm, em vez de uma caixa de texto simulada |
 | Guardrails de workspace | Sessões ficam limitadas aos caminhos absolutos aprovados em `ALLOWED_CWDS` |
 | Workspaces customizados | Adicione diretórios extras pela UI e persista tudo em SQLite |
+| Descoberta de repositórios Git | Dispare uma varredura sob demanda no seletor para listar repos Git dentro das roots permitidas |
 | Perfis de comando | Inicie sessões com `copilot-interactive` ou `gh-copilot-suggest` |
 | UX orientada a contexto | Lista de workspaces e busca de contexto para acelerar prompts |
+| Autocomplete no prompt | Use o GitHub Copilot LSP no editor de prompt do browser e aceite sugestões inline com `Tab` |
 
 ## Arquitetura em uma olhada
 
@@ -47,13 +49,14 @@ Não é apenas um console improvisado. O fluxo inclui gerenciamento de sessão, 
 flowchart LR
   A[Browser UI<br/>React + Vite + xterm] -->|WebSocket| B[Servidor wrapper Node.js]
   B --> C[GitHub Copilot CLI]
+  B --> F[GitHub Copilot Language Server]
   B --> D[Registro de workspaces<br/>allowlist + armazenamento SQLite]
   B --> E[Gerenciador de sessão<br/>ciclo de vida PTY + output em streaming]
 ```
 
 ## Stack
 
-- Backend: Node.js, TypeScript, `ws`, `node-pty`, `zod`, `pino`
+- Backend: Node.js, TypeScript, `ws`, `node-pty`, `zod`, `pino`, `@github/copilot-language-server`
 - Frontend: React 19, Vite 6, xterm.js
 - Persistência: SQLite via `sql.js` para workspaces customizados
 - Testes: Vitest no backend e no frontend
@@ -67,10 +70,12 @@ flowchart LR
   - `copilot`
   - `gh` com suporte a `gh copilot`
 
-Se o seu ambiente precisar de token explícito para o CLI, exporte uma destas variáveis antes de subir o backend:
+Se o seu ambiente precisar de token explícito para o CLI ou para o Copilot Language Server, exporte uma destas variáveis antes de subir o backend:
 
-- `COPILOT_GITHUB_TOKEN`
+- `COPILOT_TOKEN`
 - `GH_TOKEN`
+- `GITHUB_COPILOT_TOKEN`
+- `GH_COPILOT_TOKEN`
 
 ## Início rápido
 
@@ -113,6 +118,14 @@ Esse script auxiliar:
 - sobe backend e frontend juntos
 - encerra ambos com `Ctrl+C`
 
+### Reset do estado local do exec
+
+```bash
+pnpm cleanup
+```
+
+Esse comando remove o `.env` local, a skill `open-port` criada pelo `exec.sh`, os arquivos de estado rastreados do `open-port` e o wrapper legado `/usr/local/bin/copilot-api` quando ele aponta para este projeto.
+
 ## Modos alternativos de execução
 
 Somente backend:
@@ -140,6 +153,12 @@ Build de produção do frontend:
 pnpm client:build
 ```
 
+Build completo de produção:
+
+```bash
+pnpm build:all
+```
+
 ## Referência de variáveis de ambiente
 
 | Variável | Finalidade |
@@ -152,6 +171,7 @@ pnpm client:build
 | `CUSTOM_CWDS_DB_PATH` | Arquivo SQLite usado para persistir workspaces customizados |
 | `SESSION_TIMEOUT_MS` | Timeout de inatividade da sessão em milissegundos |
 | `MAX_SESSIONS` | Número máximo de sessões simultâneas |
+| `COPILOT_LSP_PATH` | Executável ou entrypoint JS opcional do GitHub Copilot Language Server usado no autocomplete do prompt |
 | `VITE_BACKEND_HOST` | Override opcional de host no frontend para compor a URL padrão do WebSocket |
 | `VITE_WS_URL` | Override opcional da URL completa do WebSocket |
 
@@ -165,6 +185,7 @@ Importante: o `cwd` selecionado precisa estar dentro de um dos caminhos configur
 4. Carregue a lista de workspaces e escolha um caminho permitido, ou adicione um caminho absoluto customizado.
 5. Escolha um perfil de comando.
 6. Inicie a sessão e interaja com o Copilot pela tela do terminal.
+7. Digite no editor de prompt e aceite as sugestões inline com `Tab` ou pelo botão **Aceitar**.
 
 Exemplos de URL WebSocket:
 
@@ -210,6 +231,7 @@ Validação manual rápida:
 - Abra o client Vite no navegador
 - Conecte com token válido e um workspace permitido
 - Envie um prompt e valide o output em streaming no terminal
+- Digite no editor de prompt e valide que o autocomplete do Copilot aparece e pode ser aceito
 
 ## Documentação extra
 

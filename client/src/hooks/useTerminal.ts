@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { LigaturesAddon } from '@xterm/addon-ligatures';
@@ -94,56 +94,68 @@ export function useTerminal(theme: ThemeDefinition, fontSize: number) {
     }
   }, [fontSize, minimumContrastRatio, theme]);
 
-  return {
-    containerRef: setContainerRef,
-    write(data: string, onWriteComplete?: () => void) {
-      if (!terminalRef.current) {
-        onWriteComplete?.();
-        return;
+  const write = useCallback((data: string, onWriteComplete?: () => void) => {
+    if (!terminalRef.current) {
+      onWriteComplete?.();
+      return;
+    }
+
+    terminalRef.current.write(data, () => {
+      onWriteComplete?.();
+    });
+  }, []);
+
+  const clear = useCallback(() => {
+    terminalRef.current?.clear();
+  }, []);
+
+  const reset = useCallback(() => {
+    terminalRef.current?.reset();
+  }, []);
+
+  const fit = useCallback(() => {
+    fitAddonRef.current?.fit();
+  }, []);
+
+  const readOutputHistory = useCallback((limit = DEFAULT_OUTPUT_HISTORY_LIMIT) => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return [];
+    }
+
+    const buffer = terminal.buffer.active;
+    const snapshotStart = Math.max(0, buffer.length - (limit * 4));
+    const lines = [];
+
+    for (let index = snapshotStart; index < buffer.length; index += 1) {
+      const line = buffer.getLine(index);
+      if (!line) {
+        continue;
       }
 
-      terminalRef.current.write(data, () => {
-        onWriteComplete?.();
+      lines.push({
+        text: line.translateToString(false),
+        isWrapped: 'isWrapped' in line ? Boolean(line.isWrapped) : false,
       });
-    },
-    clear() {
-      terminalRef.current?.clear();
-    },
-    reset() {
-      terminalRef.current?.reset();
-    },
-    fit() {
-      fitAddonRef.current?.fit();
-    },
-    readOutputHistory(limit = DEFAULT_OUTPUT_HISTORY_LIMIT) {
-      const terminal = terminalRef.current;
-      if (!terminal) {
-        return [];
-      }
+    }
 
-      const buffer = terminal.buffer.active;
-      const snapshotStart = Math.max(0, buffer.length - (limit * 4));
-      const lines = [];
+    return buildOutputHistoryFromTerminalSnapshot(lines, limit);
+  }, []);
 
-      for (let index = snapshotStart; index < buffer.length; index += 1) {
-        const line = buffer.getLine(index);
-        if (!line) {
-          continue;
-        }
+  const getSize = useCallback(() => {
+    return {
+      cols: terminalRef.current?.cols ?? 80,
+      rows: terminalRef.current?.rows ?? 24,
+    };
+  }, []);
 
-        lines.push({
-          text: line.translateToString(false),
-          isWrapped: 'isWrapped' in line ? Boolean(line.isWrapped) : false,
-        });
-      }
-
-      return buildOutputHistoryFromTerminalSnapshot(lines, limit);
-    },
-    getSize() {
-      return {
-        cols: terminalRef.current?.cols ?? 80,
-        rows: terminalRef.current?.rows ?? 24,
-      };
-    },
-  };
+  return useMemo(() => ({
+    containerRef: setContainerRef,
+    write,
+    clear,
+    reset,
+    fit,
+    readOutputHistory,
+    getSize,
+  }), [clear, fit, getSize, readOutputHistory, reset, setContainerRef, write]);
 }

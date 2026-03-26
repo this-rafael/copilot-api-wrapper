@@ -6,8 +6,10 @@ interface WorkspacePickerProps {
   workspaces: WorkspaceInfo[];
   selectedPath: string | null;
   errorMessage: string | null;
+  busyAction: 'list' | 'addCustom' | 'discoverGit' | null;
   isBusy: boolean;
   onClose: () => void;
+  onDiscoverGitWorkspaces: () => void;
   onAddCustomWorkspace: (path: string) => void;
   onSelect: (workspace: WorkspaceInfo) => void;
 }
@@ -17,8 +19,10 @@ export function WorkspacePicker({
   workspaces,
   selectedPath,
   errorMessage,
+  busyAction,
   isBusy,
   onClose,
+  onDiscoverGitWorkspaces,
   onAddCustomWorkspace,
   onSelect,
 }: WorkspacePickerProps) {
@@ -68,6 +72,11 @@ export function WorkspacePicker({
           spellCheck={false}
           onChange={(event) => setQuery(event.target.value)}
         />
+        <div className="workspace-actions">
+          <button type="button" className="ghost-button" disabled={isBusy} onClick={onDiscoverGitWorkspaces}>
+            {busyAction === 'discoverGit' ? 'Descobrindo repos Git...' : 'Auto descobrir repos Git'}
+          </button>
+        </div>
         <form
           className="workspace-picker__custom-form"
           onSubmit={(event) => {
@@ -92,7 +101,7 @@ export function WorkspacePicker({
             onChange={(event) => setCustomPath(event.target.value)}
           />
           <button type="submit" className="ghost-button" disabled={isBusy || customPath.trim().length === 0}>
-            {isBusy ? 'Salvando...' : 'Salvar workspace'}
+            {busyAction === 'addCustom' ? 'Salvando...' : 'Salvar workspace'}
           </button>
         </form>
         {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}

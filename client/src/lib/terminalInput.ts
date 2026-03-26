@@ -3,7 +3,7 @@ export const ENTER_SUBMIT_SEQUENCE = '\r';
 export const CTRL_S_SUBMIT_SEQUENCE = '\u0013';
 
 export function getPromptSubmitSequence(profile: 'copilot-interactive' | 'gh-copilot-suggest'): string {
-  return profile === 'copilot-interactive' ? CTRL_S_SUBMIT_SEQUENCE : ENTER_SUBMIT_SEQUENCE;
+  return ENTER_SUBMIT_SEQUENCE;
 }
 
 export function submitPromptToTerminal(

@@ -17,21 +17,44 @@ process.env['MAX_SESSIONS'] = '10';
 
 const AUTH_TOKEN = 'test-secret-token';
 const FAKE_PROCESS = path.resolve(__dirname, '../fixtures/fake-terminal-process.ts');
+const FAKE_LSP_PROCESS = path.resolve(__dirname, '../fixtures/fake-copilot-lsp.ts');
 
 let wss: WebSocketServer;
 let serverPort: number;
 let sessionManager: import('../../src/sessions/SessionManager.js').SessionManager;
+let autocompleteManager: import('../../src/autocomplete/AutocompleteManager.js').AutocompleteManager;
 let workspaceRegistry: import('../../src/workspaces/WorkspaceRegistry.js').WorkspaceRegistry;
 let customWorkspacePath: string;
+let gitDiscoveryRoot: string;
+let discoveredGitWorkspacePath: string;
+let editableFilePath: string;
 
 beforeAll(async () => {
   customWorkspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-wrapper-custom-workspace-'));
+  editableFilePath = path.join(customWorkspacePath, 'notes.md');
+  fs.writeFileSync(editableFilePath, '# notes\n\ninitial\n');
+  gitDiscoveryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-wrapper-discovery-root-'));
+  discoveredGitWorkspacePath = path.join(gitDiscoveryRoot, 'team-a', 'discovered-repo');
+  fs.mkdirSync(path.join(discoveredGitWorkspacePath, '.git'), { recursive: true });
+  process.env['ALLOWED_CWDS'] = [
+    process.cwd(),
+    `${process.cwd()}/`,
+    path.dirname(process.cwd()),
+    gitDiscoveryRoot,
+  ].join(',');
 
-  const [{ createWebSocketServer }, { SessionManager }, { WorkspaceRegistry }, { CustomCwdStore }] = await Promise.all([
+  const [
+    { createWebSocketServer },
+    { SessionManager },
+    { WorkspaceRegistry },
+    { CustomCwdStore },
+    { AutocompleteManager },
+  ] = await Promise.all([
     import('../../src/transport/websocketServer.js'),
     import('../../src/sessions/SessionManager.js'),
     import('../../src/workspaces/WorkspaceRegistry.js'),
     import('../../src/workspaces/CustomCwdStore.js'),
+    import('../../src/autocomplete/AutocompleteManager.js'),
   ]);
 
   workspaceRegistry = new WorkspaceRegistry(
@@ -46,7 +69,13 @@ beforeAll(async () => {
       args: [FAKE_PROCESS],
     }),
   });
-  wss = createWebSocketServer(0, AUTH_TOKEN, sessionManager, workspaceRegistry);
+  autocompleteManager = new AutocompleteManager({
+    buildCommand: () => ({
+      command: 'tsx',
+      args: [FAKE_LSP_PROCESS],
+    }),
+  });
+  wss = createWebSocketServer(0, AUTH_TOKEN, sessionManager, workspaceRegistry, autocompleteManager);
 
   await new Promise<void>((resolve) => {
     wss.once('listening', () => {
@@ -59,11 +88,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   sessionManager.killAll();
+  autocompleteManager.closeAll();
   await new Promise<void>((resolve, reject) => {
     wss.close((err) => (err ? reject(err) : resolve()));
   });
   await workspaceRegistry.close();
   fs.rmSync(customWorkspacePath, { recursive: true, force: true });
+  fs.rmSync(gitDiscoveryRoot, { recursive: true, force: true });
   fs.rmSync(process.env['CUSTOM_CWDS_DB_PATH'] as string, { force: true });
 });
 
@@ -94,6 +125,18 @@ function waitForOpen(ws: WebSocket): Promise<void> {
     ws.once('open', resolve);
     ws.once('error', reject);
   });
+}
+
+async function createSession(ws: WebSocket, cwd = process.cwd()): Promise<string> {
+  const readyPromise = waitForMessage(ws, (m: unknown) => (m as { type: string }).type === 'session.ready');
+  ws.send(JSON.stringify({
+    type: 'session.create',
+    cwd,
+    commandProfile: 'copilot-interactive',
+  }));
+
+  const ready = await readyPromise as { sessionId: string };
+  return ready.sessionId;
 }
 
 describe('WebSocket session integration', () => {
@@ -159,31 +202,38 @@ describe('WebSocket session integration', () => {
     const ws = connect(AUTH_TOKEN);
     await waitForOpen(ws);
 
-    const resultsPromise = waitForMessage(
-      ws,
-      (m: unknown) => (m as { type: string }).type === 'workspace.list.results',
-    );
+    try {
+      const resultsPromise = waitForMessage(
+        ws,
+        (m: unknown) => (m as { type: string }).type === 'workspace.list.results',
+      );
 
-    ws.send(JSON.stringify({ type: 'workspace.list' }));
+      ws.send(JSON.stringify({ type: 'workspace.list' }));
 
-    const msg = await resultsPromise as {
-      type: string;
-      workspaces: Array<{ name: string; path: string }>;
-    };
+      const msg = await resultsPromise as {
+        type: string;
+        workspaces: Array<{ name: string; path: string }>;
+      };
 
-    expect(msg.type).toBe('workspace.list.results');
-    expect(msg.workspaces).toEqual([
-      {
-        name: path.basename(path.dirname(process.cwd())),
-        path: path.dirname(process.cwd()),
-      },
-      {
-        name: path.basename(process.cwd()),
-        path: process.cwd(),
-      },
-    ]);
-
-    ws.close();
+      expect(msg.type).toBe('workspace.list.results');
+      expect(msg.workspaces).toEqual(expect.arrayContaining([
+        {
+          name: path.basename(path.dirname(process.cwd())),
+          path: path.dirname(process.cwd()),
+        },
+        {
+          name: path.basename(process.cwd()),
+          path: process.cwd(),
+        },
+        {
+          name: path.basename(gitDiscoveryRoot),
+          path: gitDiscoveryRoot,
+        },
+      ]));
+      expect(msg.workspaces).toHaveLength(3);
+    } finally {
+      ws.close();
+    }
   });
 
   it('stores a custom workspace and includes it in the workspace catalog', async () => {
@@ -204,6 +254,27 @@ describe('WebSocket session integration', () => {
 
     expect(msg.type).toBe('workspace.list.results');
     expect(msg.workspaces.some((workspace) => workspace.path === customWorkspacePath)).toBe(true);
+    ws.close();
+  });
+
+  it('discovers Git repositories and includes them in the workspace catalog', async () => {
+    const ws = connect(AUTH_TOKEN);
+    await waitForOpen(ws);
+
+    const resultsPromise = waitForMessage(
+      ws,
+      (m: unknown) => (m as { type: string }).type === 'workspace.list.results',
+    );
+
+    ws.send(JSON.stringify({ type: 'workspace.discoverGit' }));
+
+    const msg = await resultsPromise as {
+      type: string;
+      workspaces: Array<{ name: string; path: string }>;
+    };
+
+    expect(msg.type).toBe('workspace.list.results');
+    expect(msg.workspaces.some((workspace) => workspace.path === discoveredGitWorkspacePath)).toBe(true);
     ws.close();
   });
 
@@ -295,6 +366,198 @@ describe('WebSocket session integration', () => {
       expect(results.items.length).toBeGreaterThan(0);
       expect(results.items.some((item) => item.path.endsWith('server.ts'))).toBe(true);
       expect(results.items.every((item) => item.kind === 'file')).toBe(true);
+    } finally {
+      ws.close();
+    }
+  });
+
+  it('returns autocomplete results for an active session', async () => {
+    const ws = connectWithQueryToken(AUTH_TOKEN);
+    await waitForOpen(ws);
+
+    try {
+      const sessionId = await createSession(ws);
+
+      const resultsPromise = waitForMessage(
+        ws,
+        (m: unknown) => (m as { type: string; requestId?: number }).type === 'autocomplete.results'
+          && (m as { requestId?: number }).requestId === 1,
+      );
+
+      ws.send(JSON.stringify({
+        type: 'autocomplete.request',
+        sessionId,
+        requestId: 1,
+        text: 'hello',
+        cursor: 5,
+        languageId: 'markdown',
+      }));
+
+      const results = await resultsPromise as {
+        type: string;
+        sessionId: string;
+        requestId: number;
+        items: Array<{ insertText: string; replaceStart: number; replaceEnd: number }>;
+      };
+
+      expect(results.type).toBe('autocomplete.results');
+      expect(results.sessionId).toBe(sessionId);
+      expect(results.requestId).toBe(1);
+      expect(results.items).toHaveLength(1);
+      expect(results.items[0]).toEqual(expect.objectContaining({
+        insertText: ' world',
+        replaceStart: 5,
+        replaceEnd: 5,
+      }));
+    } finally {
+      ws.close();
+    }
+  });
+
+  it('reads and writes workspace files for an active custom-workspace session', async () => {
+    const ws = connect(AUTH_TOKEN);
+    await waitForOpen(ws);
+
+    try {
+      const sessionId = await createSession(ws, customWorkspacePath);
+
+      const readPromise = waitForMessage(
+        ws,
+        (m: unknown) => (m as { type: string }).type === 'file.read.results',
+      );
+
+      ws.send(JSON.stringify({
+        type: 'file.read',
+        sessionId,
+        path: 'notes.md',
+      }));
+
+      const readResult = await readPromise as {
+        type: string;
+        sessionId: string;
+        path: string;
+        content: string;
+        versionToken: string;
+      };
+
+      expect(readResult.type).toBe('file.read.results');
+      expect(readResult.sessionId).toBe(sessionId);
+      expect(readResult.path).toBe('notes.md');
+      expect(readResult.content).toContain('initial');
+
+      const writePromise = waitForMessage(
+        ws,
+        (m: unknown) => (m as { type: string }).type === 'file.write.results',
+      );
+
+      ws.send(JSON.stringify({
+        type: 'file.write',
+        sessionId,
+        path: 'notes.md',
+        content: '# notes\n\nupdated\n',
+        versionToken: readResult.versionToken,
+      }));
+
+      const writeResult = await writePromise as {
+        type: string;
+        sessionId: string;
+        path: string;
+        versionToken: string;
+      };
+
+      expect(writeResult.type).toBe('file.write.results');
+      expect(writeResult.sessionId).toBe(sessionId);
+      expect(writeResult.path).toBe('notes.md');
+      expect(writeResult.versionToken).not.toBe(readResult.versionToken);
+      expect(fs.readFileSync(editableFilePath, 'utf8')).toContain('updated');
+    } finally {
+      ws.close();
+      fs.writeFileSync(editableFilePath, '# notes\n\ninitial\n');
+    }
+  });
+
+  it('returns autocomplete results for a real workspace document path', async () => {
+    const ws = connect(AUTH_TOKEN);
+    await waitForOpen(ws);
+
+    try {
+      const sessionId = await createSession(ws, customWorkspacePath);
+
+      const resultsPromise = waitForMessage(
+        ws,
+        (m: unknown) => (m as { type: string; requestId?: number }).type === 'autocomplete.results'
+          && (m as { requestId?: number }).requestId === 7,
+      );
+
+      ws.send(JSON.stringify({
+        type: 'autocomplete.request',
+        sessionId,
+        requestId: 7,
+        text: '# notes\n\nhello',
+        cursor: '# notes\n\nhello'.length,
+        documentPath: 'notes.md',
+        languageId: 'markdown',
+      }));
+
+      const results = await resultsPromise as {
+        type: string;
+        sessionId: string;
+        requestId: number;
+        items: Array<{ insertText: string }>;
+      };
+
+      expect(results.type).toBe('autocomplete.results');
+      expect(results.sessionId).toBe(sessionId);
+      expect(results.requestId).toBe(7);
+      expect(results.items[0]?.insertText).toBe(' world');
+    } finally {
+      ws.close();
+    }
+  });
+
+  it('forwards autocomplete acceptance back to the Copilot LSP bridge', async () => {
+    const ws = connect(AUTH_TOKEN);
+    await waitForOpen(ws);
+
+    try {
+      const sessionId = await createSession(ws);
+
+      const resultsPromise = waitForMessage(
+        ws,
+        (m: unknown) => (m as { type: string; requestId?: number }).type === 'autocomplete.results'
+          && (m as { requestId?: number }).requestId === 2,
+      );
+
+      ws.send(JSON.stringify({
+        type: 'autocomplete.request',
+        sessionId,
+        requestId: 2,
+        text: 'console.',
+        cursor: 8,
+        languageId: 'typescript',
+      }));
+
+      const results = await resultsPromise as {
+        items: Array<{ id: string; insertText: string }>;
+      };
+
+      expect(results.items[0]?.insertText).toBe('log()');
+
+      const acceptedPromise = waitForMessage(
+        ws,
+        (m: unknown) => (m as { type: string; message?: string }).type === 'autocomplete.status'
+          && ((m as { message?: string }).message ?? '').includes('Sugestao aceita'),
+      );
+
+      ws.send(JSON.stringify({
+        type: 'autocomplete.accept',
+        sessionId,
+        suggestionId: results.items[0]?.id,
+      }));
+
+      const accepted = await acceptedPromise as { type: string; message: string };
+      expect(accepted.type).toBe('autocomplete.status');
+      expect(accepted.message).toContain('Sugestao aceita: accept:console-log');
     } finally {
       ws.close();
     }

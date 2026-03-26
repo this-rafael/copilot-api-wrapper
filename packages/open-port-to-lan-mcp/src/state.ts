@@ -4,7 +4,8 @@ import path from 'path';
 export interface RuleEntry {
   id: string;
   ruleName: string;
-  port: number;
+  localPort: number;
+  publicPort: number;
   protocol: 'tcp' | 'udp';
   description: string;
   createdAt: string; // ISO 8601
@@ -79,9 +80,9 @@ export class RuleStateStore {
     return this.getAll().filter((r) => new Date(r.expiresAt).getTime() > now);
   }
 
-  /** Returns the active rule for a given port, or undefined if none. */
-  findByPort(port: number): RuleEntry | undefined {
-    return this.getActive().find((r) => r.port === port);
+  /** Returns the active rule for a given publicPort, or undefined if none. */
+  findByPort(publicPort: number): RuleEntry | undefined {
+    return this.getActive().find((r) => r.publicPort === publicPort);
   }
 
   findById(id: string): RuleEntry | undefined {

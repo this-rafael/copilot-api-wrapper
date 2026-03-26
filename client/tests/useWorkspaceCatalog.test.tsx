@@ -20,11 +20,15 @@ function WorkspaceCatalogHarness({ addMessageListener, sendMessage = vi.fn() }: 
       <div data-testid="status">{catalog.status}</div>
       <div data-testid="count">{catalog.workspaces.length}</div>
       <div data-testid="error">{catalog.errorMessage ?? ''}</div>
+      <div data-testid="pending-action">{catalog.pendingAction ?? ''}</div>
       <button type="button" onClick={() => catalog.requestWorkspaces()}>
         request
       </button>
       <button type="button" onClick={() => catalog.addCustomWorkspace('/home/user/repo-c')}>
         add
+      </button>
+      <button type="button" onClick={() => catalog.discoverGitWorkspaces()}>
+        discover
       </button>
       <button type="button" onClick={() => catalog.reset()}>
         reset
@@ -60,6 +64,7 @@ describe('useWorkspaceCatalog', () => {
 
     expect(sendMessage).toHaveBeenCalledWith({ type: 'workspace.list' });
     expect(screen.getByTestId('status')).toHaveTextContent('loading');
+    expect(screen.getByTestId('pending-action')).toHaveTextContent('list');
 
     act(() => {
       messageListener?.({
@@ -73,6 +78,7 @@ describe('useWorkspaceCatalog', () => {
 
     expect(screen.getByTestId('status')).toHaveTextContent('ready');
     expect(screen.getByTestId('count')).toHaveTextContent('2');
+    expect(screen.getByTestId('pending-action')).toHaveTextContent('');
   });
 
   it('resets the catalog state', () => {
@@ -125,5 +131,25 @@ describe('useWorkspaceCatalog', () => {
       type: 'workspace.addCustom',
       path: '/home/user/repo-c',
     });
+  });
+
+  it('sends the Git discovery request', () => {
+    const sendMessage = vi.fn();
+
+    render(
+      <WorkspaceCatalogHarness
+        sendMessage={sendMessage}
+        addMessageListener={() => () => {}}
+      />,
+    );
+
+    act(() => {
+      screen.getByRole('button', { name: 'discover' }).click();
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'workspace.discoverGit',
+    });
+    expect(screen.getByTestId('pending-action')).toHaveTextContent('discoverGit');
   });
 });

@@ -11,8 +11,9 @@ function makeTmpFile(): string {
 function makeEntry(overrides?: Partial<Parameters<RuleStateStore['add']>[0]>) {
   return {
     id: 'abc12345',
-    ruleName: 'MCP-LAN-8080-abc12345',
-    port: 8080,
+    ruleName: 'MCP-LAN-8081-abc12345',
+    localPort: 8080,
+    publicPort: 8081,
     protocol: 'tcp' as const,
     description: '',
     createdAt: new Date().toISOString(),
@@ -54,15 +55,17 @@ describe('RuleStateStore', () => {
   it('distinguishes expired from active rules', () => {
     const expired = makeEntry({
       id: 'old1',
-      ruleName: 'MCP-LAN-3000-old1',
-      port: 3000,
+      ruleName: 'MCP-LAN-3001-old1',
+      localPort: 3000,
+      publicPort: 3001,
       createdAt: new Date(Date.now() - 120_000).toISOString(),
       expiresAt: new Date(Date.now() - 60_000).toISOString(),
     });
     const active = makeEntry({
       id: 'new1',
-      ruleName: 'MCP-LAN-4000-new1',
-      port: 4000,
+      ruleName: 'MCP-LAN-4001-new1',
+      localPort: 4000,
+      publicPort: 4001,
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
 
@@ -76,27 +79,30 @@ describe('RuleStateStore', () => {
   });
 
   it('persists state across reloads', () => {
-    store.add(makeEntry({ id: 'persist1', ruleName: 'MCP-LAN-5000-persist1', port: 5000 }));
+    store.add(makeEntry({ id: 'persist1', ruleName: 'MCP-LAN-5001-persist1', localPort: 5000, publicPort: 5001 }));
     const store2 = new RuleStateStore(tmpFile);
     expect(store2.findById('persist1')).toBeDefined();
-    expect(store2.findById('persist1')?.port).toBe(5000);
+    expect(store2.findById('persist1')?.localPort).toBe(5000);
+    expect(store2.findById('persist1')?.publicPort).toBe(5001);
   });
 
-  it('findByPort returns the active rule for a port', () => {
-    store.add(makeEntry({ id: 'p1', ruleName: 'MCP-LAN-9000-p1', port: 9000 }));
-    expect(store.findByPort(9000)).toBeDefined();
-    expect(store.findByPort(9001)).toBeUndefined();
+  it('findByPort returns the active rule matching the publicPort', () => {
+    store.add(makeEntry({ id: 'p1', ruleName: 'MCP-LAN-9001-p1', localPort: 9000, publicPort: 9001 }));
+    expect(store.findByPort(9001)).toBeDefined();
+    expect(store.findByPort(9000)).toBeUndefined(); // localPort is not indexed
+    expect(store.findByPort(9002)).toBeUndefined();
   });
 
   it('findByPort does not return expired rules', () => {
     store.add(
       makeEntry({
         id: 'expired',
-        ruleName: 'MCP-LAN-7070-expired',
-        port: 7070,
+        ruleName: 'MCP-LAN-7071-expired',
+        localPort: 7070,
+        publicPort: 7071,
         expiresAt: new Date(Date.now() - 1000).toISOString(),
       }),
     );
-    expect(store.findByPort(7070)).toBeUndefined();
+    expect(store.findByPort(7071)).toBeUndefined();
   });
 });

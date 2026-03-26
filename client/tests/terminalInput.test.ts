@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  CTRL_S_SUBMIT_SEQUENCE,
-  ENTER_SUBMIT_SEQUENCE,
-  getPromptSubmitSequence,
-  PROMPT_SUBMIT_DELAY_MS,
-  submitPromptToTerminal,
-} from '../src/lib/terminalInput';
+import { CTRL_S_SUBMIT_SEQUENCE, ENTER_SUBMIT_SEQUENCE, getPromptSubmitSequence, PROMPT_SUBMIT_DELAY_MS, submitPromptToTerminal } from '../src/lib/terminalInput';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -29,7 +23,7 @@ describe('submitPromptToTerminal', () => {
     expect(sendInput).toHaveBeenNthCalledWith(2, ENTER_SUBMIT_SEQUENCE);
   });
 
-  it('supports Ctrl+S submission for the interactive profile', () => {
+  it('still supports custom submit sequences when explicitly requested', () => {
     vi.useFakeTimers();
     const sendInput = vi.fn();
 
@@ -41,8 +35,8 @@ describe('submitPromptToTerminal', () => {
     expect(sendInput).toHaveBeenNthCalledWith(2, CTRL_S_SUBMIT_SEQUENCE);
   });
 
-  it('maps the interactive profile to Ctrl+S and suggest profile to Enter', () => {
-    expect(getPromptSubmitSequence('copilot-interactive')).toBe(CTRL_S_SUBMIT_SEQUENCE);
+  it('maps both command profiles to Enter for current Copilot CLI sessions', () => {
+    expect(getPromptSubmitSequence('copilot-interactive')).toBe(ENTER_SUBMIT_SEQUENCE);
     expect(getPromptSubmitSequence('gh-copilot-suggest')).toBe(ENTER_SUBMIT_SEQUENCE);
   });
 });

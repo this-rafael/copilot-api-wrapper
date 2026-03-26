@@ -105,7 +105,9 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(cleanupTimer);
 
   for (const entry of store.getActive()) {
-    console.log(`[server] Removing rule "${entry.ruleName}" (port ${entry.port})`);
+	console.log(
+	  `[server] Removing rule "${entry.ruleName}" (${entry.localPort} -> ${entry.publicPort}/${entry.protocol})`,
+	);
     removeFirewallRule(entry.ruleName);
     store.remove(entry.id);
   }

@@ -8,7 +8,8 @@ import { config } from './config.js';
 
 // ── Argument types inferred from each tool's Zod schema ──────────────────────
 const _openPortSchema = z.object({
-  port: z.number().int().min(1).max(65535),
+  localPort: z.number().int().min(1).max(65535),
+  publicPort: z.number().int().min(1).max(65535),
   durationSeconds: z.number().int(),
   protocol: z.enum(['tcp', 'udp']).default('tcp'),
   description: z.string().max(120).optional(),
@@ -36,16 +37,22 @@ export function createMcpServer(store: RuleStateStore): McpServer {
   // ── Tool: open-port-to-lan ────────────────────────────────────────────────
   server.tool(
     'open-port-to-lan',
-    'Temporarily open a local Windows Firewall inbound rule so a phone or device on the same LAN ' +
-      'can reach a service running on this machine. The service must already be listening on ' +
-      '0.0.0.0 or the machine LAN IP. Returns the rule ID, expiry time, and LAN access URLs.',
+    'Temporarily open a Windows Firewall inbound rule to expose a locally running service to the LAN. ' +
+      'Provide the port the service is already listening on (localPort) and the port to open on the ' +
+      'firewall for external LAN access (publicPort). Returns the rule ID, expiry time, and LAN access URLs.',
     {
-      port: z
+      localPort: z
         .number()
         .int()
         .min(1)
         .max(65535)
-        .describe('Local port to open for inbound LAN access'),
+        .describe('Port the service is already listening on locally (e.g. 3000)'),
+      publicPort: z
+        .number()
+        .int()
+        .min(1)
+        .max(65535)
+        .describe('Port to open on the firewall for LAN access (e.g. 3001)'),
       durationSeconds: z
         .number()
         .int()
@@ -64,8 +71,8 @@ export function createMcpServer(store: RuleStateStore): McpServer {
         .optional()
         .describe('Optional label for the audit log (e.g. "dev API server")'),
     },
-    async ({ port, durationSeconds, protocol, description }: OpenPortArgs) => {
-      const existing = store.findByPort(port);
+    async ({ localPort, publicPort, durationSeconds, protocol, description }: OpenPortArgs) => {
+      const existing = store.findByPort(publicPort);
       if (existing) {
         return {
           content: [
@@ -74,7 +81,7 @@ export function createMcpServer(store: RuleStateStore): McpServer {
               text: JSON.stringify({
                 error: 'PORT_ALREADY_OPEN',
                 message:
-                  `Port ${port}/${protocol} already has an active rule (expires ${existing.expiresAt}). ` +
+                  `Public port ${publicPort}/${protocol} already has an active rule (expires ${existing.expiresAt}). ` +
                   `Use close-port with ruleId "${existing.id}" to revoke it first.`,
                 ruleId: existing.id,
                 expiresAt: existing.expiresAt,
@@ -86,12 +93,12 @@ export function createMcpServer(store: RuleStateStore): McpServer {
       }
 
       const id = shortId();
-      const ruleName = `MCP-LAN-${port}-${id}`;
+      const ruleName = `MCP-LAN-${publicPort}-${id}`;
       const now = new Date();
       const expiresAt = new Date(now.getTime() + durationSeconds * 1000);
 
       try {
-        addFirewallRule({ ruleName, port, protocol });
+        addFirewallRule({ ruleName, port: publicPort, protocol });
       } catch (err) {
         return {
           content: [
@@ -110,7 +117,8 @@ export function createMcpServer(store: RuleStateStore): McpServer {
       store.add({
         id,
         ruleName,
-        port,
+        localPort,
+        publicPort,
         protocol,
         description: description ?? '',
         createdAt: now.toISOString(),
@@ -119,7 +127,7 @@ export function createMcpServer(store: RuleStateStore): McpServer {
 
       const lanAddresses = getLanAddresses();
       const schemeMap: Record<number, string> = { 80: 'http', 443: 'https', 8080: 'http' };
-      const scheme = schemeMap[port] ?? 'http';
+      const scheme = schemeMap[publicPort] ?? 'http';
 
       return {
         content: [
@@ -129,13 +137,14 @@ export function createMcpServer(store: RuleStateStore): McpServer {
               success: true,
               ruleId: id,
               ruleName,
-              port,
+              localPort,
+              publicPort,
               protocol,
               openedAt: now.toISOString(),
               expiresAt: expiresAt.toISOString(),
               durationSeconds,
               lanAddresses,
-              accessUrls: lanAddresses.map((ip) => `${scheme}://${ip}:${port}`),
+              accessUrls: lanAddresses.map((ip) => `${scheme}://${ip}:${publicPort}`),
             }),
           },
         ],
@@ -179,9 +188,10 @@ export function createMcpServer(store: RuleStateStore): McpServer {
             type: 'text' as const,
             text: JSON.stringify({
               success: true,
-              message: `Port ${entry.port}/${entry.protocol} closed and firewall rule removed.`,
+              message: `Port mapping ${entry.localPort} → ${entry.publicPort}/${entry.protocol} closed and firewall rule removed.`,
               ruleId: entry.id,
-              port: entry.port,
+              localPort: entry.localPort,
+              publicPort: entry.publicPort,
               protocol: entry.protocol,
             }),
           },
@@ -206,7 +216,8 @@ export function createMcpServer(store: RuleStateStore): McpServer {
               count: active.length,
               ports: active.map((r) => ({
                 ruleId: r.id,
-                port: r.port,
+                localPort: r.localPort,
+                publicPort: r.publicPort,
                 protocol: r.protocol,
                 description: r.description,
                 openedAt: r.createdAt,

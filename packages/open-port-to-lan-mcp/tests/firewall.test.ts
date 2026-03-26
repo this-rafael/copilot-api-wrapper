@@ -11,24 +11,24 @@ function makeTmpFile(): string {
 
 describe('firewall rule naming', () => {
   it('generates deterministic rule name format', () => {
-    const port = 3000;
+    const publicPort = 3001;
     const id = 'abc12345';
-    const ruleName = `MCP-LAN-${port}-${id}`;
-    expect(ruleName).toBe('MCP-LAN-3000-abc12345');
+    const ruleName = `MCP-LAN-${publicPort}-${id}`;
+    expect(ruleName).toBe('MCP-LAN-3001-abc12345');
   });
 
-  it('encodes port and id in the rule name', () => {
-    const port = 8080;
+  it('encodes publicPort and id in the rule name', () => {
+    const publicPort = 8081;
     const id = 'zz999999';
-    const ruleName = `MCP-LAN-${port}-${id}`;
-    expect(ruleName).toContain('8080');
+    const ruleName = `MCP-LAN-${publicPort}-${id}`;
+    expect(ruleName).toContain('8081');
     expect(ruleName).toContain('zz999999');
   });
 
-  it('two different ids produce unique rule names for the same port', () => {
+  it('two different ids produce unique rule names for the same publicPort', () => {
     const id1 = 'aaa00001';
     const id2 = 'bbb00002';
-    expect(`MCP-LAN-8080-${id1}`).not.toBe(`MCP-LAN-8080-${id2}`);
+    expect(`MCP-LAN-8081-${id1}`).not.toBe(`MCP-LAN-8081-${id2}`);
   });
 });
 
@@ -42,8 +42,9 @@ describe('scheduler reconcileExpired (no real netsh – dry-run on Linux)', () =
 
     store.add({
       id: 'e1',
-      ruleName: 'MCP-LAN-3001-e1',
-      port: 3001,
+      ruleName: 'MCP-LAN-3002-e1',
+      localPort: 3001,
+      publicPort: 3002,
       protocol: 'tcp',
       description: '',
       createdAt: new Date(Date.now() - 120_000).toISOString(),
@@ -52,8 +53,9 @@ describe('scheduler reconcileExpired (no real netsh – dry-run on Linux)', () =
 
     store.add({
       id: 'a1',
-      ruleName: 'MCP-LAN-3002-a1',
-      port: 3002,
+      ruleName: 'MCP-LAN-3003-a1',
+      localPort: 3002,
+      publicPort: 3003,
       protocol: 'tcp',
       description: '',
       createdAt: new Date().toISOString(),

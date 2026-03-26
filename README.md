@@ -38,8 +38,10 @@ The result is not a demo shell. It is a practical remote workflow with session l
 | Real terminal rendering | ANSI output is preserved through xterm-based rendering instead of a fake text console |
 | Workspace guardrails | Sessions are limited to approved absolute paths through `ALLOWED_CWDS` |
 | Custom workspaces | Add extra directories from the UI and persist them in SQLite |
+| Git repository discovery | Trigger an on-demand scan from the workspace picker to surface Git repos inside allowed roots |
 | Command profiles | Start sessions with `copilot-interactive` or `gh-copilot-suggest` |
 | Context-aware UX | Built-in workspace listing and context search support for faster prompting |
+| Prompt autocomplete | Use GitHub Copilot LSP in the browser prompt editor and accept inline suggestions with `Tab` |
 
 ## Architecture at a glance
 
@@ -47,13 +49,14 @@ The result is not a demo shell. It is a practical remote workflow with session l
 flowchart LR
   A[Browser UI<br/>React + Vite + xterm] -->|WebSocket| B[Node.js wrapper server]
   B --> C[GitHub Copilot CLI]
+  B --> F[GitHub Copilot Language Server]
   B --> D[Workspace registry<br/>allowlist + custom SQLite store]
   B --> E[Session manager<br/>PTY lifecycle + streaming output]
 ```
 
 ## Stack
 
-- Backend: Node.js, TypeScript, `ws`, `node-pty`, `zod`, `pino`
+- Backend: Node.js, TypeScript, `ws`, `node-pty`, `zod`, `pino`, `@github/copilot-language-server`
 - Frontend: React 19, Vite 6, xterm.js
 - Persistence: SQLite via `sql.js` for custom workspaces
 - Tests: Vitest on both backend and frontend
@@ -67,10 +70,12 @@ flowchart LR
   - `copilot`
   - `gh` with `gh copilot` support
 
-If your environment needs an explicit token for the CLI, export one of these before starting the backend:
+If your environment needs an explicit token for the CLI or the Copilot language server, export one of these before starting the backend:
 
-- `COPILOT_GITHUB_TOKEN`
+- `COPILOT_TOKEN`
 - `GH_TOKEN`
+- `GITHUB_COPILOT_TOKEN`
+- `GH_COPILOT_TOKEN`
 
 ## Quick start
 
@@ -113,6 +118,14 @@ This helper script:
 - starts backend and frontend together
 - shuts both down on `Ctrl+C`
 
+### Reset local exec state
+
+```bash
+pnpm cleanup
+```
+
+This removes the local `.env`, the `open-port` Copilot skill created by `exec.sh`, tracked `open-port` state files, and the legacy `/usr/local/bin/copilot-api` wrapper when it points to this project.
+
 ## Alternative run modes
 
 Backend only:
@@ -140,6 +153,12 @@ Frontend production build:
 pnpm client:build
 ```
 
+Full production build:
+
+```bash
+pnpm build:all
+```
+
 ## Environment reference
 
 | Variable | Purpose |
@@ -152,6 +171,7 @@ pnpm client:build
 | `CUSTOM_CWDS_DB_PATH` | SQLite file used to persist custom workspaces |
 | `SESSION_TIMEOUT_MS` | Session inactivity timeout in milliseconds |
 | `MAX_SESSIONS` | Maximum number of simultaneous sessions |
+| `COPILOT_LSP_PATH` | Optional custom executable or JS entrypoint for the GitHub Copilot language server used by prompt autocomplete |
 | `VITE_BACKEND_HOST` | Optional frontend host override for the default WebSocket URL |
 | `VITE_WS_URL` | Optional complete WebSocket URL override |
 
@@ -165,6 +185,7 @@ Important: the selected `cwd` must be inside one of the configured `ALLOWED_CWDS
 4. Load the workspace list and choose an allowed path, or add a custom absolute path.
 5. Pick a command profile.
 6. Start the session and interact with Copilot from the terminal view.
+7. Use the prompt editor normally and accept inline autocomplete suggestions with `Tab` or the **Aceitar** button.
 
 Example WebSocket URLs:
 
@@ -210,6 +231,7 @@ Quick manual validation:
 - Open the Vite client in the browser
 - Connect with a valid token and an allowed workspace
 - Send a prompt and verify streaming terminal output
+- Type in the prompt editor and verify Copilot autocomplete appears inline and can be accepted
 
 ## Extra docs
 

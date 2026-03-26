@@ -56,4 +56,25 @@ describe('WorkspaceRegistry', () => {
       await registry.close();
     }
   });
+
+  it('discovers Git repositories under allowed roots and merges them into the catalog', async () => {
+    const configuredRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-wrapper-discovery-root-'));
+    const discoveredRepo = path.join(configuredRoot, 'team-a', 'project-x');
+    fs.mkdirSync(path.join(discoveredRepo, '.git'), { recursive: true });
+    tempDirs.push(configuredRoot);
+
+    const registry = await createRegistry([configuredRoot]);
+
+    try {
+      const workspaces = await registry.discoverGitWorkspaces();
+
+      expect(workspaces.some((workspace) => workspace.path === configuredRoot)).toBe(true);
+      expect(workspaces.some((workspace) => workspace.path === discoveredRepo)).toBe(true);
+
+      const persistedCatalog = await registry.getAllowedWorkspaces();
+      expect(persistedCatalog.some((workspace) => workspace.path === discoveredRepo)).toBe(true);
+    } finally {
+      await registry.close();
+    }
+  });
 });

@@ -3,6 +3,17 @@ import path from 'path';
 import type { WorkspaceInfo } from '../protocol/messages.js';
 import { CustomCwdStore } from './CustomCwdStore.js';
 
+const GIT_DIRECTORY_NAME = '.git';
+const DISCOVERY_IGNORED_DIRECTORIES = new Set([
+  GIT_DIRECTORY_NAME,
+  'node_modules',
+  'dist',
+  'build',
+  '.next',
+  '.turbo',
+  'coverage',
+]);
+
 function normalizeWorkspacePath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -33,9 +44,59 @@ function isInsideAllowedPath(candidate: string, allowedPath: string): boolean {
   return candidate === allowedPath || candidate.startsWith(`${allowedPath}${path.sep}`);
 }
 
+function toWorkspaceInfo(workspacePath: string): WorkspaceInfo {
+  return {
+    name: getWorkspaceName(workspacePath),
+    path: workspacePath,
+  };
+}
+
+async function findGitRepositories(rootPath: string): Promise<string[]> {
+  const repositories = new Set<string>();
+  const pendingDirectories = [rootPath];
+
+  while (pendingDirectories.length > 0) {
+    const currentPath = pendingDirectories.pop();
+    if (!currentPath) {
+      continue;
+    }
+
+    const entries = await fs.readdir(currentPath, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT' || error.code === 'EACCES' || error.code === 'EPERM') {
+        return null;
+      }
+
+      throw error;
+    });
+
+    if (!entries) {
+      continue;
+    }
+
+    if (entries.some((entry) => entry.name === GIT_DIRECTORY_NAME)) {
+      repositories.add(currentPath);
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      if (DISCOVERY_IGNORED_DIRECTORIES.has(entry.name)) {
+        continue;
+      }
+
+      pendingDirectories.push(path.join(currentPath, entry.name));
+    }
+  }
+
+  return Array.from(repositories.values());
+}
+
 export class WorkspaceRegistry {
   private readonly configuredCwds: string[];
   private readonly configuredSet: Set<string>;
+  private readonly discoveredCwds = new Set<string>();
 
   constructor(configuredCwds: string[], private readonly customCwdStore: CustomCwdStore) {
     this.configuredCwds = configuredCwds
@@ -65,13 +126,35 @@ export class WorkspaceRegistry {
     const workspaces = new Map<string, WorkspaceInfo>();
 
     for (const cwd of await this.getAllowedCwds()) {
-      workspaces.set(cwd, {
-        name: getWorkspaceName(cwd),
-        path: cwd,
-      });
+      workspaces.set(cwd, toWorkspaceInfo(cwd));
+    }
+
+    for (const cwd of this.discoveredCwds) {
+      workspaces.set(cwd, toWorkspaceInfo(cwd));
     }
 
     return Array.from(workspaces.values()).sort((left, right) => left.path.localeCompare(right.path));
+  }
+
+  async discoverGitWorkspaces(): Promise<WorkspaceInfo[]> {
+    const discoveredCwds = new Set<string>();
+
+    for (const cwd of await this.getAllowedCwds()) {
+      const repositories = await findGitRepositories(cwd);
+      for (const repositoryPath of repositories) {
+        const normalized = normalizeWorkspacePath(repositoryPath);
+        if (normalized) {
+          discoveredCwds.add(normalized);
+        }
+      }
+    }
+
+    this.discoveredCwds.clear();
+    for (const cwd of discoveredCwds) {
+      this.discoveredCwds.add(cwd);
+    }
+
+    return this.getAllowedWorkspaces();
   }
 
   async validateCwd(cwd: string): Promise<void> {

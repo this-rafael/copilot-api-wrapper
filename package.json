@@ -6,8 +6,10 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "dev:all": "./start.sh",
+    "dev:all": "bash ./scripts/dev-all.sh",
+    "cleanup": "bash ./cleanup.sh",
     "build": "tsc",
+    "build:all": "pnpm build && pnpm client:build",
     "start": "node dist/server.js",
     "test": "vitest run",
     "client:dev": "pnpm --dir client dev",
@@ -19,10 +21,12 @@
   "license": "ISC",
   "packageManager": "pnpm@10.6.5",
   "dependencies": {
+    "@github/copilot-language-server": "^1.453.0",
     "dotenv": "^16.6.1",
     "nanoid": "^5.1.6",
     "node-pty": "^1.1.0",
     "pino": "^10.3.1",
+    "simple-git": "^3.33.0",
     "sql.js": "^1.14.1",
     "ws": "^8.19.0",
     "zod": "^4.3.6"

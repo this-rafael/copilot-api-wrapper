@@ -16,10 +16,12 @@ describe('WorkspacePicker', () => {
       <WorkspacePicker
         open
         selectedPath={null}
-          errorMessage={null}
-          isBusy={false}
+        errorMessage={null}
+        busyAction={null}
+        isBusy={false}
         onClose={vi.fn()}
-          onAddCustomWorkspace={vi.fn()}
+        onDiscoverGitWorkspaces={vi.fn()}
+        onAddCustomWorkspace={vi.fn()}
         onSelect={onSelect}
         workspaces={[
           { name: 'copilot-api-wrapper', path: '/home/user/copilot-api-wrapper' },
@@ -48,8 +50,10 @@ describe('WorkspacePicker', () => {
         open
         selectedPath={null}
         errorMessage={null}
+        busyAction={null}
         isBusy={false}
         onClose={vi.fn()}
+        onDiscoverGitWorkspaces={vi.fn()}
         onAddCustomWorkspace={onAddCustomWorkspace}
         onSelect={vi.fn()}
         workspaces={[]}
@@ -63,5 +67,29 @@ describe('WorkspacePicker', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar workspace' }));
 
     expect(onAddCustomWorkspace).toHaveBeenCalledWith('/home/user/outro-projeto');
+  });
+
+  it('requests Git workspace discovery', async () => {
+    const user = userEvent.setup();
+    const onDiscoverGitWorkspaces = vi.fn();
+
+    render(
+      <WorkspacePicker
+        open
+        selectedPath={null}
+        errorMessage={null}
+        busyAction={null}
+        isBusy={false}
+        onClose={vi.fn()}
+        onDiscoverGitWorkspaces={onDiscoverGitWorkspaces}
+        onAddCustomWorkspace={vi.fn()}
+        onSelect={vi.fn()}
+        workspaces={[]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Auto descobrir repos Git' }));
+
+    expect(onDiscoverGitWorkspaces).toHaveBeenCalledTimes(1);
   });
 });

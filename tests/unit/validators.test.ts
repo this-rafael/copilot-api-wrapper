@@ -170,6 +170,73 @@ describe('parseClientMessage', () => {
     });
   });
 
+  describe('workspace.discoverGit', () => {
+    it('accepts valid payload', () => {
+      const result = parseClientMessage({
+        type: 'workspace.discoverGit',
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('file.read', () => {
+    it('accepts valid payload', () => {
+      const result = parseClientMessage({
+        type: 'file.read',
+        sessionId: 'abc123',
+        path: 'src/server.ts',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects empty path', () => {
+      const result = parseClientMessage({
+        type: 'file.read',
+        sessionId: 'abc123',
+        path: '   ',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('file.write', () => {
+    it('accepts valid payload', () => {
+      const result = parseClientMessage({
+        type: 'file.write',
+        sessionId: 'abc123',
+        path: 'src/server.ts',
+        content: 'export const ok = true;\n',
+        versionToken: '1:20',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects missing version token', () => {
+      const result = parseClientMessage({
+        type: 'file.write',
+        sessionId: 'abc123',
+        path: 'src/server.ts',
+        content: 'export const ok = true;\n',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('autocomplete.request', () => {
+    it('accepts documentPath when provided', () => {
+      const result = parseClientMessage({
+        type: 'autocomplete.request',
+        sessionId: 'abc123',
+        requestId: 1,
+        text: 'const value = ',
+        cursor: 14,
+        documentPath: 'client/src/App.tsx',
+        languageId: 'typescriptreact',
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe('invalid messages', () => {
     it('rejects unknown type', () => {
       const result = parseClientMessage({ type: 'unknown.message', sessionId: 'abc' });

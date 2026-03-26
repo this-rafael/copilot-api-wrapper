@@ -34,6 +34,18 @@ function SessionHarness({ addMessageListener, sendMessage = vi.fn() }: HarnessPr
       <button type="button" onClick={() => session.resetSession()}>
         reset
       </button>
+      <button
+        type="button"
+        onClick={() => session.requestAutocomplete(7, 'hello', 5, 'markdown')}
+      >
+        autocomplete-request
+      </button>
+      <button
+        type="button"
+        onClick={() => session.acceptAutocomplete('suggestion-1')}
+      >
+        autocomplete-accept
+      </button>
     </>
   );
 }
@@ -148,5 +160,53 @@ describe('useSession readiness', () => {
     });
 
     expectStatus('idle');
+  });
+
+  it('sends autocomplete messages for the active session', () => {
+    let messageListener: ((message: ServerMessage) => void) | null = null;
+    const sendMessage = vi.fn();
+
+    render(
+      <SessionHarness
+        sendMessage={sendMessage}
+        addMessageListener={(listener) => {
+          messageListener = listener;
+          return () => {
+            messageListener = null;
+          };
+        }}
+      />,
+    );
+
+    act(() => {
+      screen.getByRole('button', { name: 'create' }).click();
+      messageListener?.({ type: 'session.ready', sessionId: 'session-4' });
+      messageListener?.({
+        type: 'terminal.output',
+        sessionId: 'session-4',
+        data: 'READY\r\n',
+      });
+    });
+
+    act(() => {
+      screen.getByRole('button', { name: 'autocomplete-request' }).click();
+      screen.getByRole('button', { name: 'autocomplete-accept' }).click();
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'autocomplete.request',
+      sessionId: 'session-4',
+      requestId: 7,
+      text: 'hello',
+      cursor: 5,
+      languageId: 'markdown',
+      tabSize: 2,
+      insertSpaces: true,
+    });
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'autocomplete.accept',
+      sessionId: 'session-4',
+      suggestionId: 'suggestion-1',
+    });
   });
 });

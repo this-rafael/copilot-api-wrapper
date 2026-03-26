@@ -9,7 +9,9 @@ interface OutputHistoryHarnessProps {
   nextItems?: OutputHistoryItem[];
 }
 
-function OutputHistoryHarness({ resetSignal, nextItems = [] }: OutputHistoryHarnessProps) {
+const EMPTY_HISTORY: OutputHistoryItem[] = [];
+
+function OutputHistoryHarness({ resetSignal, nextItems = EMPTY_HISTORY }: OutputHistoryHarnessProps) {
   const { items, replaceItems } = useOutputHistory({ resetSignal });
 
   useEffect(() => {

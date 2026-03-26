@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import * as pty from 'node-pty';
+import { TerminalInteractionHistory } from '../autocomplete/TerminalInteractionHistory.js';
 import { logger } from '../observability/logger.js';
 
 export interface SessionOptions {
@@ -15,6 +16,7 @@ export interface SessionOptions {
 export class CopilotSession extends EventEmitter {
   readonly id: string;
   readonly cwd: string;
+  private readonly interactionHistory = new TerminalInteractionHistory();
   private ptyProcess: pty.IPty;
   private _exited = false;
 
@@ -32,6 +34,7 @@ export class CopilotSession extends EventEmitter {
     });
 
     this.ptyProcess.onData((data) => {
+      this.interactionHistory.recordOutput(data);
       this.emit('output', data);
     });
 
@@ -48,6 +51,7 @@ export class CopilotSession extends EventEmitter {
 
   write(data: string): void {
     if (!this._exited) {
+      this.interactionHistory.recordInput(data);
       this.ptyProcess.write(data);
     }
   }
@@ -67,10 +71,13 @@ export class CopilotSession extends EventEmitter {
       } catch (err) {
         logger.warn({ sessionId: this.id, err }, 'Error killing PTY process');
       }
-      // Emit exit synchronously so listeners receive it before they are removed
       this.emit('exit', null, signal);
       this.removeAllListeners();
     }
+  }
+
+  getRecentInteractionsContext(limit = 3): string {
+    return this.interactionHistory.formatRecentInteractions(limit);
   }
 
   get exited(): boolean {

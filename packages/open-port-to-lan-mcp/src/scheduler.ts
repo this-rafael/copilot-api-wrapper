@@ -10,7 +10,8 @@ export function reconcileExpired(store: RuleStateStore): void {
   for (const entry of expired) {
     console.log(
       `[scheduler] Removing expired rule "${entry.ruleName}" ` +
-        `(port ${entry.port}, expired ${entry.expiresAt})`,
+        `(${entry.localPort}→${entry.publicPort}, expired ${entry.expiresAt})`,
+
     );
     removeFirewallRule(entry.ruleName);
     store.remove(entry.id);

@@ -109,4 +109,26 @@ describe('ContextSearchService', () => {
       await workspaceRegistry.close();
     }
   });
+
+  it('supports fuzzy file lookup for fzf-like queries', async () => {
+    const cwd = makeWorkspace();
+    process.env['ALLOWED_CWDS'] = [cwd, process.cwd()].join(',');
+    const { ContextSearchService } = await import('../../src/sessions/ContextSearchService.js');
+    const workspaceRegistry = await createWorkspaceRegistry([cwd, process.cwd()]);
+    const service = new ContextSearchService(workspaceRegistry);
+
+    try {
+      const results = await service.search({
+        cwd,
+        mentionType: 'file',
+        query: 'svt',
+        limit: 10,
+      });
+
+      expect(results.some((item) => item.path === 'src/server.ts')).toBe(true);
+      expect(results[0]?.path).toBe('src/server.ts');
+    } finally {
+      await workspaceRegistry.close();
+    }
+  });
 });

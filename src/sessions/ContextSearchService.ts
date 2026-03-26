@@ -125,10 +125,11 @@ export class ContextSearchService {
 
   private matchFiles(paths: string[], query: string, limit: number): ContextSearchItem[] {
     return paths
-      .filter((entry) => this.matches(entry, query))
-      .sort((left, right) => this.scorePath(left, query) - this.scorePath(right, query) || left.localeCompare(right))
+      .map((entry) => ({ entry, score: this.scorePath(entry, query) }))
+      .filter((item): item is { entry: string; score: number } => item.score !== null)
+      .sort((left, right) => left.score - right.score || left.entry.localeCompare(right.entry))
       .slice(0, limit)
-      .map((entry) => ({
+      .map(({ entry }) => ({
         id: entry,
         kind: 'file' as const,
         label: path.basename(entry),
@@ -151,10 +152,11 @@ export class ContextSearchService {
     }
 
     return [...folders]
-      .filter((entry) => this.matches(entry, query))
-      .sort((left, right) => this.scorePath(left, query) - this.scorePath(right, query) || left.localeCompare(right))
+      .map((entry) => ({ entry, score: this.scorePath(entry, query) }))
+      .filter((item): item is { entry: string; score: number } => item.score !== null)
+      .sort((left, right) => left.score - right.score || left.entry.localeCompare(right.entry))
       .slice(0, limit)
-      .map((entry) => ({
+      .map(({ entry }) => ({
         id: entry,
         kind: 'folder' as const,
         label: path.basename(entry),
@@ -163,33 +165,81 @@ export class ContextSearchService {
       }));
   }
 
-  private matches(entry: string, query: string): boolean {
-    if (!query) {
-      return true;
-    }
-
-    return entry.toLowerCase().includes(query);
-  }
-
-  private scorePath(entry: string, query: string): number {
+  private scorePath(entry: string, query: string): number | null {
     if (!query) {
       return entry.split('/').length;
     }
 
     const normalized = entry.toLowerCase();
     const basename = path.basename(normalized);
+
     if (basename === query) {
       return 0;
     }
-    if (basename.startsWith(query)) {
+
+    if (normalized === query) {
       return 1;
+    }
+
+    if (basename.startsWith(query)) {
+      return 5 + (basename.length - query.length);
+    }
+
+    if (normalized.startsWith(query)) {
+      return 10 + (normalized.length - query.length);
+    }
+
+    const basenameIndex = basename.indexOf(query);
+    if (basenameIndex >= 0) {
+      return 20 + basenameIndex;
     }
 
     const index = normalized.indexOf(query);
     if (index >= 0) {
-      return 10 + index;
+      return 40 + index;
     }
 
-    return Number.MAX_SAFE_INTEGER;
+    const basenameFuzzyScore = this.scoreSubsequence(basename, query);
+    if (basenameFuzzyScore !== null) {
+      return 80 + basenameFuzzyScore;
+    }
+
+    const pathFuzzyScore = this.scoreSubsequence(normalized, query);
+    if (pathFuzzyScore !== null) {
+      return 120 + pathFuzzyScore;
+    }
+
+    return null;
+  }
+
+  private scoreSubsequence(value: string, query: string): number | null {
+    let score = 0;
+    let consecutiveBonus = 0;
+    let previousIndex = -1;
+    let firstIndex = -1;
+
+    for (const character of query) {
+      const nextIndex = value.indexOf(character, previousIndex + 1);
+      if (nextIndex === -1) {
+        return null;
+      }
+
+      if (firstIndex === -1) {
+        firstIndex = nextIndex;
+      }
+
+      if (previousIndex >= 0) {
+        score += nextIndex - previousIndex - 1;
+        if (nextIndex === previousIndex + 1) {
+          consecutiveBonus += 2;
+        }
+      } else {
+        score += nextIndex;
+      }
+
+      previousIndex = nextIndex;
+    }
+
+    return Math.max(0, score + firstIndex - consecutiveBonus);
   }
 }

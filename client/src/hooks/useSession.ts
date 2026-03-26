@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  AutocompleteResultsMessage,
+  AutocompleteStatusMessage,
   ClientMessage,
   CommandProfile,
   ContextSearchResultsMessage,
+  FileReadResultsMessage,
+  FileWriteResultsMessage,
   ServerMessage,
 } from '../lib/protocol';
 import { stripAnsiSequences } from '../lib/terminalOutput';
@@ -20,6 +24,10 @@ export function isSessionReadyOutput(data: string): boolean {
 type MessageSubscription = (listener: (message: ServerMessage) => void) => () => void;
 type OutputListener = (chunk: string) => void;
 type SearchListener = (message: ContextSearchResultsMessage) => void;
+type FileReadListener = (message: FileReadResultsMessage) => void;
+type FileWriteListener = (message: FileWriteResultsMessage) => void;
+type AutocompleteResultsListener = (message: AutocompleteResultsMessage) => void;
+type AutocompleteStatusListener = (message: AutocompleteStatusMessage) => void;
 
 interface UseSessionOptions {
   socketStatus: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'error';
@@ -40,6 +48,10 @@ export function useSession(options: UseSessionOptions) {
   const statusRef = useRef<SessionStatus>('idle');
   const outputListenersRef = useRef(new Set<OutputListener>());
   const searchListenersRef = useRef(new Set<SearchListener>());
+  const fileReadListenersRef = useRef(new Set<FileReadListener>());
+  const fileWriteListenersRef = useRef(new Set<FileWriteListener>());
+  const autocompleteResultsListenersRef = useRef(new Set<AutocompleteResultsListener>());
+  const autocompleteStatusListenersRef = useRef(new Set<AutocompleteStatusListener>());
 
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -75,6 +87,30 @@ export function useSession(options: UseSessionOptions) {
         case 'context.search.results':
           if (message.sessionId === sessionIdRef.current) {
             searchListenersRef.current.forEach((listener) => listener(message));
+          }
+          break;
+
+        case 'file.read.results':
+          if (message.sessionId === sessionIdRef.current) {
+            fileReadListenersRef.current.forEach((listener) => listener(message));
+          }
+          break;
+
+        case 'file.write.results':
+          if (message.sessionId === sessionIdRef.current) {
+            fileWriteListenersRef.current.forEach((listener) => listener(message));
+          }
+          break;
+
+        case 'autocomplete.results':
+          if (message.sessionId === sessionIdRef.current) {
+            autocompleteResultsListenersRef.current.forEach((listener) => listener(message));
+          }
+          break;
+
+        case 'autocomplete.status':
+          if (message.sessionId === sessionIdRef.current) {
+            autocompleteStatusListenersRef.current.forEach((listener) => listener(message));
           }
           break;
 
@@ -171,6 +207,98 @@ export function useSession(options: UseSessionOptions) {
     };
   }, []);
 
+  const readFile = useCallback((path: string) => {
+    if (!sessionIdRef.current) {
+      return;
+    }
+
+    sendMessage({
+      type: 'file.read',
+      sessionId: sessionIdRef.current,
+      path,
+    });
+  }, [sendMessage]);
+
+  const writeFile = useCallback((path: string, content: string, versionToken: string) => {
+    if (!sessionIdRef.current) {
+      return;
+    }
+
+    sendMessage({
+      type: 'file.write',
+      sessionId: sessionIdRef.current,
+      path,
+      content,
+      versionToken,
+    });
+  }, [sendMessage]);
+
+  const addFileReadListener = useCallback((listener: FileReadListener) => {
+    fileReadListenersRef.current.add(listener);
+    return () => {
+      fileReadListenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const addFileWriteListener = useCallback((listener: FileWriteListener) => {
+    fileWriteListenersRef.current.add(listener);
+    return () => {
+      fileWriteListenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const requestAutocomplete = useCallback((
+    requestId: number,
+    text: string,
+    cursor: number,
+    languageId = 'markdown',
+    tabSize = 2,
+    insertSpaces = true,
+    documentPath?: string,
+  ) => {
+    if (!sessionIdRef.current) {
+      return;
+    }
+
+    sendMessage({
+      type: 'autocomplete.request',
+      sessionId: sessionIdRef.current,
+      requestId,
+      text,
+      cursor,
+      documentPath,
+      languageId,
+      tabSize,
+      insertSpaces,
+    });
+  }, [sendMessage]);
+
+  const acceptAutocomplete = useCallback((suggestionId: string) => {
+    if (!sessionIdRef.current) {
+      return;
+    }
+
+    sendMessage({
+      type: 'autocomplete.accept',
+      sessionId: sessionIdRef.current,
+      suggestionId,
+    });
+  }, [sendMessage]);
+
+  const addAutocompleteResultsListener = useCallback((listener: AutocompleteResultsListener) => {
+    autocompleteResultsListenersRef.current.add(listener);
+    return () => {
+      autocompleteResultsListenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const addAutocompleteStatusListener = useCallback((listener: AutocompleteStatusListener) => {
+    autocompleteStatusListenersRef.current.add(listener);
+    return () => {
+      autocompleteStatusListenersRef.current.delete(listener);
+    };
+  }, []);
+
   const resetSession = useCallback(() => {
     sessionIdRef.current = null;
     statusRef.current = 'idle';
@@ -190,8 +318,16 @@ export function useSession(options: UseSessionOptions) {
     resize,
     closeSession,
     searchContext,
+    readFile,
+    writeFile,
     addOutputListener,
     addSearchResultsListener,
+    addFileReadListener,
+    addFileWriteListener,
+    requestAutocomplete,
+    acceptAutocomplete,
+    addAutocompleteResultsListener,
+    addAutocompleteStatusListener,
     resetSession,
   };
 }

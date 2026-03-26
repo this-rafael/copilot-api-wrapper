@@ -5,7 +5,7 @@
 1. **Node.js 20+** instalado e disponível no PATH
 2. **pnpm** instalado (`npm i -g pnpm`)
 3. **Copilot CLI autenticado**: execute `copilot login` ou `gh auth login` e verifique com `copilot --version`
-4. **Variável `COPILOT_GITHUB_TOKEN`** disponível no ambiente (token GitHub com escopo Copilot)
+4. **Variável `COPILOT_TOKEN`** disponível no ambiente (token GitHub com escopo Copilot)
 
 ## Configuração
 
@@ -129,6 +129,31 @@ pnpm client:dev
 	- no modo raw, `Enter` volta a agir como tecla de envio direto para o terminal
 	- abrir o teclado virtual redimensiona o terminal sem cobrir o output
 	- alternar entre Dracula e VS Code Light atualiza a interface e o terminal
+
+## Checklist de fullscreen do terminal em viewport mobile
+
+1. Abra o frontend em um viewport mobile real ou emulado.
+2. Inicie uma sessao e toque em `Tela cheia` na barra do terminal.
+3. Valide em portrait fullscreen:
+	- o terminal ocupa todo o viewport
+	- header, toolbar, quick actions e input bar desaparecem
+	- apenas os botoes `Sair` e `Output` permanecem visiveis
+	- nao sobra sheet ou modal do modo normal por cima do terminal
+4. Ainda em fullscreen, toque em `Output` para alternar a orientacao.
+5. Valide em landscape fullscreen:
+	- a area do terminal gira 90 graus de verdade
+	- a largura e a altura do terminal passam a refletir os eixos trocados do viewport
+	- o terminal continua preenchendo a area inteira sem barras externas do app
+6. Enquanto estiver em fullscreen, redimensione o viewport ou gire o dispositivo.
+7. Confirme que o terminal continua ajustado corretamente apos:
+	- entrar em fullscreen
+	- sair em `Sair`
+	- sair por `Esc` ou evento nativo do browser
+	- alternar entre portrait e landscape
+	- redimensionar o viewport
+8. Saia do fullscreen e confirme que o comportamento normal volta sem regressao:
+	- header, toolbar, quick actions e input bar reaparecem
+	- copiar output, command picker e mention sheet voltam a funcionar fora do fullscreen
 
 ## Nota de segurança
 
