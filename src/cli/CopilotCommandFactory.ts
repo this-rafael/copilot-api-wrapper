@@ -7,6 +7,8 @@ export interface CliCommand {
   args: string[];
 }
 
+// aaaaa
+
 // Flags that must never be included regardless of profile or configuration
 const FORBIDDEN_FLAGS = new Set([
   '--allow-all',
